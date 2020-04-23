@@ -11,7 +11,7 @@ A github action has been provided to get you going.
 
 # Status
 
-[Build status badge] [Coverage status badge]
+![master](https://github.com/alekcz/konserve-template/workflows/master/badge.svg) [![codecov](https://codecov.io/gh/alekcz/konserve-template/branch/master/graph/badge.svg)](https://codecov.io/gh/alekcz/konserve-template) 
 
 ## Prerequisites
 
