@@ -32,14 +32,17 @@
       (<!! (k/update-in store [:foo] name))
       (is (= "bar2"
              (<!! (k/get store :foo))))
-      (<!! (k/assoc-in store [:baz] {:bar 42}))
+      (print "Write speed: ")       
+      (time (<!! (k/assoc-in store [:baz] {:bar 42})))
       (is (= (<!! (k/get-in store [:baz :bar]))
              42))
-      (<!! (k/update-in store [:baz :bar] inc))
+      (print "Update speed: ")
+      (time (<!! (k/update-in store [:baz :bar] inc)))
       (is (= (<!! (k/get-in store [:baz :bar]))
              43))
       (<!! (k/update-in store [:baz :bar] + 2 3))
-      (is (= (<!! (k/get-in store [:baz :bar]))
+      (print "Read speed: ")
+      (is (= (time (<!! (k/get-in store [:baz :bar])))
              48))
       (<!! (k/dissoc store :foo))
       (is (= (<!! (k/get-in store [:foo]))
@@ -127,21 +130,18 @@
       (print "\nWriting 20MB string: ")
       (time (<!! (k/assoc store :record string20MB)))
       (is (= (count string20MB) (count (<!! (k/get store :record)))))
-      (println "Verifying 20MB string...\n")
       (print "Writing 20MB binary: ")
       (time (<!! (k/bassoc store :binary (byte-array sevens))))
-      (println "Verifying 20MB binary...\n")
       (<!! (k/bget store :binary (fn [{:keys [input-stream]}]
                                     (is (= (pmap byte (slurp input-stream))
                                            sevens)))))
-      (println "Done.")                            
       (delete-store store))))  
 
 (deftest exceptions-test
   (testing "Test the append store functionality."
     (let [_ (println "Exceptions test")
           store (<!! (new-your-store "critical"))
-          corrupt (update-in store [:store] reset! (atom {:data {}}))]
+          corrupt (update-in store [:store] swap! dissoc :auth)]
       (is (= ExceptionInfo (type (<!! (k/update-in corrupt {} 10)))))
       (is (= ExceptionInfo (type (<!! (k/get corrupt :bad)))))
       (is (= ExceptionInfo (type (<!! (k/get-meta corrupt :bad)))))

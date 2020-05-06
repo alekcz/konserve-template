@@ -15,10 +15,11 @@
 
 (set! *warn-on-reflection* 1)
 
-(defn- fail 
+(defn- reality 
   "This function has nothing to do with konserve. 
    It is used to simulate a failure in interactinb with your store"
   [store]
+  (Thread/sleep (rand-int 200))
   (if (nil? (:auth @store)) (throw (Exception. "Boo!")) nil)) 
 
 (defn serialize 
@@ -42,14 +43,14 @@
 (defn it-exists? 
   "Doc string"
   [store id]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;returns a boolean
   (some? (get-in @store [:meta id]))) ;example
   
 (defn get-it 
   "Doc string"
   [store id read-handlers]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;returns deserialized data as a map
   (let [meta (get-in @store [:meta id])
         data (get-in @store [:data id])]
@@ -58,21 +59,21 @@
 (defn get-it-only   
   "Doc string"
   [store id read-handlers]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;returns deserialized data as a map
   (deserialize (get-in @store [:data id]) read-handlers)) ;example
 
 (defn get-meta-only 
   "Doc string"
   [store id read-handlers]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;returns deserialized data as a map
   (deserialize (get-in @store [:meta id]) read-handlers)) ;example
 
 (defn update-it 
   "Doc string"
   [store id data-and-meta read-handlers]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;1. serialize the data
   ;2. update the data
   ;3. deserialize the updated data
@@ -87,7 +88,7 @@
 (defn delete-it 
   "Doc string"
   [store id]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;delete the data and return nil on success
   (swap! store update-in [:meta] dissoc id)
   (swap! store update-in [:data] dissoc id) ;example
@@ -96,7 +97,7 @@
 (defn get-keys 
   "Doc string"
   [store read-handlers]
-  (fail store) ;simulate store failure
+  (reality store) ;simulate store failure
   ;returns deserialized data as a map
   (let [meta (get @store :meta)
         meta-vals (seq (vals meta))]
@@ -262,7 +263,7 @@
           (let [your-conn (store-initializer critical-data config)] 
             (async/put! res-ch 
               (map->YourStore { :store your-conn
-                                :error (fail your-conn) ;simulate store init error
+                                :error (reality your-conn) ;simulate store init error
                                 :serializer serializer
                                 :read-handlers read-handlers
                                 :write-handlers write-handlers
