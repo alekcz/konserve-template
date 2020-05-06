@@ -1,15 +1,21 @@
 # konserve-template
 
+## About 
 This is a starter template it give basic guide lines on how to build a konserve backend.   
-The source code is heavily annotated so go check it out. 
+The source code is heavily commented so go [check it out](./src/konserve_template/core.clj).   
+Why comments in the source? Two reasons. Firstly it's easier to understand what is going on in the context of the code. 
+When you start implementing your backend having the explanation right where you're writing the code is quite benficial.
 
 It's important to have a solid foundation when building a library. To help you keep your quality up you can run
 - `lein test` to test your code
 - `lein cloverage` to see the coverage of your tests. 
 
-A github action has been provided to get you going. 
+A github action has also been provided to get you going.
 
-# Status
+_(Eventually you'll replace this section with background around your konserve-backend)_
+
+
+## Status
 
 ![master](https://github.com/alekcz/konserve-template/workflows/master/badge.svg) [![codecov](https://codecov.io/gh/alekcz/konserve-template/branch/master/graph/badge.svg)](https://codecov.io/gh/alekcz/konserve-template) 
 
@@ -43,7 +49,7 @@ _Link to the your lib on clojars_
 
 ## License
 
-Copyright © 2020 Your name
+Copyright © 2020 Alexander Oloo _(Replace my name with yours)_
 
 This program and the accompanying materials are made available under the
 terms of the Eclipse Public License 2.0 which is available at
