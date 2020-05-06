@@ -17,14 +17,28 @@
 
 (defn- reality 
   "This function has nothing to do with konserve. 
-   It is used to simulate a failure in interactinb with your store"
+   It is used to simulate a latency and faile in interact your store.
+   You can remove this function once you've connected konserve to your store"
   [store]
   (Thread/sleep (rand-int 200))
   (if (nil? (:auth @store)) (throw (Exception. "Boo!")) nil)) 
 
 (defn serialize 
-  "Doc string"
-  [data]
+  "Serializes clojure data structure to your backend.   
+   This function needs to handle both regular clojure data structures
+   as well as binary data. If your backend does not support binary data you can use Base64 encoding
+   to represent your binary data as a string. It's worthing noting that Base64 increase the data size by 33%
+   
+   It's a good idea to serialize actual data and metadata seperately. It would be a real tragedy to have 
+   to download 100MB just to inspect 20 bytes of metadata.  
+   
+   `data`: clojure data or binary data
+   `write-handlers`: atom containing incognito write handlers. pr-str is the base level serializer 
+                     Learn more [here](https://github.com/replikativ/incognito)     
+
+   This function must should data that is ready to be inserted into you backend as is by any subsequent functino.
+   "
+  [data write-handlers]
   ;the simplest way to serialize data is using pr-str 
   ;your store should also be able to hold binary data
   (if (bytes? data)
