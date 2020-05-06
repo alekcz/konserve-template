@@ -1,5 +1,7 @@
 # konserve-template
 
+A reference implementation of the [konserve kv-protocol (v0.6.0)](https://github.com/replikativ/konserve) on top of a clojure atom
+
 ## About 
 This is a starter template it give basic guide lines on how to build a konserve backend.   
 The source code is heavily commented so go [check it out](./src/konserve_template/core.clj).   
