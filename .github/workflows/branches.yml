@@ -2,10 +2,13 @@ name: branches
 
 on:
   push:
-    branches: '!master'  
+    branches: 
+      - '*'  
+      - '!master'  
   pull_request:
-    branches: '!master'  
-
+    - '*'  
+    - '!master'  
+    
 jobs:
   build:
     runs-on: ubuntu-18.04
