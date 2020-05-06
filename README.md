@@ -33,7 +33,7 @@ _Link to the your lib on clojars_
 `[your/store "x.y.z"]`
 
 ```clojure
-(require '[konserve-yourstore.core :refer :all]
+(require '[konserve-yourstore.core :refer [new-your-store]]
          '[clojure.core.async :refer [<!!] :as async]
          '[konserve.core :as k])
   
