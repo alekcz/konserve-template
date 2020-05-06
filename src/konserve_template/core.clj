@@ -33,23 +33,30 @@
    to download 100MB just to inspect 20 bytes of metadata.  
    
    `data`: clojure data or binary data
-   `write-handlers`: atom containing incognito write handlers. pr-str is the base level serializer 
+   `write-handlers`: atom containing incognito write handlers. pr-str is the base level serializer. 
                      Learn more [here](https://github.com/replikativ/incognito)     
 
-   This function must should data that is ready to be inserted into you backend as is by any subsequent functino.
+   This function should return data that is ready to be inserted into you backend as is by any subsequent functions.
    "
   [data write-handlers]
-  ;the simplest way to serialize data is using pr-str 
-  ;your store should also be able to hold binary data
   (if (bytes? data)
     {:data (identity data) :type "binary"}
     {:data (pr-str data) :type "regular"}))
 
 (defn deserialize 
-  "Doc string"
+  "Deserializes data form your backend into clojure data structures.   
+   This function is complementary to `serialize` and should be lossless so that no matter how many time data
+   is serialized, deserialized and serialized again no data is lost or corrupted. 
+   
+   This function should also be able to deserialize meta data.  
+   
+   `data`: clojure data or binary data
+   `read-handlers`: atom containing incognito read handlers. read-string-safe is the base level serializer 
+                     Learn more [here](https://github.com/replikativ/incognito)     
+
+   This function should return clojure data structures that are ready to be used as is by any subsequent functions.
+   "
   [data' read-handlers]
-  ;and the simplest way to deserialize data is using incognito
-  ;and it should be able to deserialize it
   (if (= "binary" (:type data'))
     (:data data')
     (read-string-safe @read-handlers (:data data'))))
