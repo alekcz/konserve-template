@@ -6,60 +6,82 @@
             [malli.generator :as mg])
   (:import  [clojure.lang ExceptionInfo]))
 
-(deftest core-test
-  (testing "Test the core API."
-    (let [_ (println "Core API test")
+(deftest get-nil-tests
+  (testing "Test getting on empty store"
+    (let [_ (println "Getting from an empty store")
           store (<!! (new-your-store "critical"))]
-      (is (= (<!! (k/get store :foo))
-             nil))
-      (is (not (<!! (k/exists? store :foo))))      
+      (is (= nil (<!! (k/get store :foo))))
       (is (= nil (<!! (k/get-meta store :foo))))
-      (<!! (k/bget store :foo 
-        (fn [{:keys [input-stream]}] 
-          (is (nil? input-stream))))) 
+      (is (not (<!! (k/exists? store :foo))))
+      (is (= :default (<!! (k/get-in store [:fuu] :default))))
+      (<!! (k/bget store :foo (fn [res] 
+                                (is (nil? res)))))
+      (delete-store store))))
+
+(deftest write-value-tests
+  (testing "Test writing to store"
+    (let [_ (println "Writing to store")
+          store (<!! (new-your-store "critical"))]
+      (is (not (<!! (k/exists? store :foo))))
       (<!! (k/assoc store :foo :bar))
-      (is (= (<!! (k/get store :foo))
-             :bar))
       (is (<!! (k/exists? store :foo)))
-      (<!! (k/assoc-in store [:foo] :bar2))
-      (is (= :bar2 (<!! (k/get store :foo))))
+      (is (= :bar (<!! (k/get store :foo))))
       (is (= :foo (:key (<!! (k/get-meta store :foo)))))
-      (is (= :default
-             (<!! (k/get-in store [:fuu] :default))))
-      (is (= :bar2 (<!! (k/get store :foo))))
-      (is (= :default
-             (<!! (k/get-in store [:fuu] :default))))
+      (<!! (k/assoc-in store [:baz] {:bar 42}))
+      (is (= 42 (<!! (k/get-in store [:baz :bar]))))
+      (delete-store store))))
+
+(deftest update-value-tests
+  (testing "Test updating values in the store"
+    (let [_ (println "Updating values in the store")
+          store (<!! (new-your-store "critical"))]
+      (<!! (k/assoc store :foo :baritone))
+      (is (= :baritone (<!! (k/get-in store [:foo]))))
       (<!! (k/update-in store [:foo] name))
-      (is (= "bar2"
-             (<!! (k/get store :foo))))
-      (print "Write speed: ")       
-      (time (<!! (k/assoc-in store [:baz] {:bar 42})))
-      (is (= (<!! (k/get-in store [:baz :bar]))
-             42))
-      (print "Update speed: ")
-      (time (<!! (k/update-in store [:baz :bar] inc)))
-      (is (= (<!! (k/get-in store [:baz :bar]))
-             43))
-      (<!! (k/update-in store [:baz :bar] + 2 3))
-      (print "Read speed: ")
-      (is (= (time (<!! (k/get-in store [:baz :bar])))
-             48))
+      (is (= "baritone" (<!! (k/get-in store [:foo]))))
+      (delete-store store))))
+
+(deftest exists-tests
+  (testing "Test check for existing key in the store"
+    (let [_ (println "Checking is keys exist")
+          store (<!! (new-your-store "critical"))]
+      (is (not (<!! (k/exists? store :foo))))
+      (<!! (k/assoc store :foo :baritone))
+      (is  (<!! (k/exists? store :foo)))
       (<!! (k/dissoc store :foo))
-      (is (= (<!! (k/get-in store [:foo]))
-             nil))
+      (is (not (<!! (k/exists? store :foo))))
+      (delete-store store))))
+
+(deftest binary-tests
+  (testing "Test writing binary date"
+    (let [_ (println "Reading and writing binary data")
+          store (<!! (new-your-store "critical"))]
+      (is (not (<!! (k/exists? store :binbar))))
+      (<!! (k/bget store :binbar (fn [ans] (is (nil? ans)))))
       (<!! (k/bassoc store :binbar (byte-array (range 10))))
       (<!! (k/bget store :binbar (fn [{:keys [input-stream]}]
                                     (is (= (map byte (slurp input-stream))
                                            (range 10))))))
-      (<!! (k/assoc-in store [:binbar] :binbin))
-      (is (= #{:baz :binbar}
-             (<!! (async/into #{} (k/keys store)))))
-      (delete-store store)
-      nil)))
+      (<!! (k/bassoc store :binbar (byte-array (map inc (range 10))))) 
+      (<!! (k/bget store :binbar (fn [{:keys [input-stream]}]
+                                    (is (= (map byte (slurp input-stream))
+                                           (map inc (range 10)))))))                                          
+      ;(is (<!! (k/exists? store :binbar)))
+      (delete-store store))))
+  
+(deftest key-tests
+  (testing "Test getting keys from the store"
+    (let [_ (println "Getting keys from store")
+          store (<!! (new-your-store "critical"))]
+      (is (= #{} (<!! (async/into #{} (k/keys store)))))
+      (<!! (k/assoc store :baz 20))
+      (<!! (k/assoc store :binbar 20))
+      (is (= #{:baz :binbar} (<!! (async/into #{} (k/keys store)))))
+      (delete-store store))))  
 
 (deftest append-test
   (testing "Test the append store functionality."
-    (let [_ (println "Append test")
+    (let [_ (println "Appending to store")
           store (<!! (new-your-store "critical"))]
       (<!! (k/append store :foo {:bar 42}))
       (<!! (k/append store :foo {:bar 43}))
@@ -75,7 +97,7 @@
 
 (deftest invalid-store-test
   (testing "Invalid store functionality."
-    (let [_ (println "Invalid store test")
+    (let [_ (println "Connecting to invalid store")
           store (<!! (new-your-store nil))]
       (is (= ExceptionInfo (type store))))))
 
@@ -93,7 +115,7 @@
 
 (deftest realistic-test
   (testing "Realistic data test."
-    (let [_ (println "Realistic data test")
+    (let [_ (println "Entering realistic data")
           store (<!! (new-your-store "critical"))
           home (mg/generate home {:size 20 :seed 2})
           address (:address home)
@@ -123,7 +145,7 @@
 
 (deftest bulk-test
   (testing "Bulk data test."
-    (let [_ (println "Bulk data test")
+    (let [_ (println "Writing bulk data")
           store (<!! (new-your-store "critical"))
           string20MB (apply str (vec (range 3000000)))
           range2MB 2097152
@@ -139,19 +161,19 @@
       (delete-store store))))  
 
 (deftest exceptions-test
-  (testing "Test the append store functionality."
-    (let [_ (println "Exceptions test")
+  (testing "Test exception handling"
+    (let [_ (println "Generating exceptions")
           store (<!! (new-your-store "critical"))
-          corrupt (update-in store [:store] swap! dissoc :auth)]
-      (is (= ExceptionInfo (type (<!! (k/update-in corrupt {} 10)))))
+          corrupt (update-in store [:store] #(dissoc % :auth))] ; let's corrupt our store
       (is (= ExceptionInfo (type (<!! (k/get corrupt :bad)))))
       (is (= ExceptionInfo (type (<!! (k/get-meta corrupt :bad)))))
-      (is (= ExceptionInfo (type (<!! (k/bget corrupt :bad (fn [_] nil))))))
       (is (= ExceptionInfo (type (<!! (k/assoc corrupt :bad 10)))))
-      (is (= ExceptionInfo (type (<!! (k/bassoc store :binbar (byte-array (range 10)))))))
       (is (= ExceptionInfo (type (<!! (k/dissoc corrupt :bad)))))
       (is (= ExceptionInfo (type (<!! (k/assoc-in corrupt [:bad :robot] 10)))))
       (is (= ExceptionInfo (type (<!! (k/update-in corrupt [:bad :robot] inc)))))
       (is (= ExceptionInfo (type (<!! (k/exists? corrupt :bad)))))
       (is (= ExceptionInfo (type (<!! (k/keys corrupt)))))
+      (is (= ExceptionInfo (type (<!! (k/bget corrupt :bad (fn [_] nil))))))   
+      (is (= ExceptionInfo (type (<!! (k/bassoc corrupt :binbar (byte-array (range 10)))))))   
+      (is (= ExceptionInfo (type (<!! (delete-store corrupt)))))
       (delete-store store))))

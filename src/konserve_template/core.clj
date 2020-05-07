@@ -12,7 +12,8 @@
                                         PKeyIterable
                                         -keys]]
             [incognito.edn :refer [read-string-safe]])
-  (:import  [java.io ByteArrayInputStream ByteArrayOutputStream]))
+  (:import  [java.io ByteArrayInputStream ByteArrayOutputStream]
+            [java.nio ByteBuffer]))
 
 (set! *warn-on-reflection* 1)
 
@@ -21,32 +22,32 @@
    It is used to simulate a latency and faile in interact your store.
    You can remove this function once you've connected konserve to your store"
   [store]
-  (Thread/sleep (rand-int 200))
-  (if (nil? (:auth @store)) (throw (Exception. "Boo!")) nil)) 
+  (Thread/sleep (+ 50 (rand-int 450))) ; random delay to simulate a real i/o. 
+  (if (nil? (:auth store)) (throw (Exception. "Boo!")) nil)) 
 
 (defn prep-write 
   "Doc string"
   [data]
-  data)
+  {:data data})
 
 (defn prep-read 
   "Doc string"
   [data']
-  data')
+  (:data data'))
 
 (defn it-exists? 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
   ;returns a boolean
-  (some? (get-in @store [:data id]))) ;example
+  (contains? (deref (:data store)) id)) ;example
   
 (defn get-it 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
   ;returns deserialized data as a map
-  (get-in @store [:data id]))
+  (prep-read (get (deref (:data store)) id)))
 
 (defn update-it 
   "Doc string"
@@ -56,22 +57,22 @@
   ;2. update the data
   ;3. deserialize the updated data
   ;4. return the data
-  (swap! store assoc-in [:data id] data)) ;example
+  (swap! (:data store) #(assoc % id (prep-write data))))
 
 (defn delete-it 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
   ;delete the data and return nil on success
-  (swap! store update-in [:data] dissoc id)) 
+  (swap! (:data store) #(dissoc % id)))
 
 (defn get-keys 
   "Doc string"
   [store]
   (reality store) ;simulate store failure
   ;returns deserialized data as a map
-  (let [keys (seq (vals (get-in @store [:data])))]
-    keys)) ;example
+  (let [keys (seq (vals @(:data store)))]
+    (map prep-read keys))) ;example
 
 (defn str-uuid 
   "Doc string"
@@ -81,6 +82,8 @@
 (defn prep-ex 
   "Doc string"
   [^String message ^Exception e]
+  ; Use print the stack trace when things are going wonky
+  ;(.printStackTrace e)
   (ex-info message {:error (.getMessage e) :cause (.getCause e) :trace (.getStackTrace e)}))
 
 (defn prep-stream 
@@ -113,8 +116,9 @@
         (try
           (let [res (get-it store (str-uuid key))]
             (if (some? res) 
-              (let [bais (ByteArrayInputStream. res)] 
-                (async/put! res-ch (second (-deserialize serializer read-handlers bais))))
+              (let [bais (ByteArrayInputStream. res)
+                    data (-deserialize serializer read-handlers bais)]
+                (async/put! res-ch (second data)))
               (async/close! res-ch)))
           (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve value from store" e)))))
       res-ch))
@@ -127,8 +131,9 @@
         (try
           (let [res (get-it store (str-uuid key))]
             (if (some? res) 
-              (let [bais (ByteArrayInputStream. res)] 
-                (async/put! res-ch (first (-deserialize serializer read-handlers bais))))
+              (let [bais (ByteArrayInputStream. res)
+                    data (-deserialize serializer read-handlers bais)] 
+                (async/put! res-ch (first data)))
               (async/close! res-ch)))
           (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve value metadata from store" e)))))
       res-ch))
@@ -140,17 +145,17 @@
       (async/thread
         (try
           (let [[fkey & rkey] key-vec
-                old' (get-it store (str-uuid fkey))
-                old   (when old'
-                        (let [bais (ByteArrayInputStream. old')]
-                          (-deserialize serializer write-handlers bais)))
-                new [(meta-up-fn (first old)) 
-                     (if rkey (apply update-in (second old) rkey up-fn args) (apply up-fn (second old) args))]
-                baos (ByteArrayOutputStream.)]
-            (-serialize serializer baos write-handlers new)
+                old-val' (get-it store (str-uuid fkey))
+                old-val (when old-val'
+                          (let [bais (ByteArrayInputStream. old-val')]
+                            (-deserialize serializer read-handlers bais)))
+                new-val [(meta-up-fn (first old-val)) 
+                         (if rkey (apply update-in (second old-val) rkey up-fn args) (apply up-fn (second old-val) args))]
+                ^ByteArrayOutputStream baos (ByteArrayOutputStream.)]
+            (-serialize serializer baos write-handlers new-val)
             (update-it store (str-uuid fkey) (.toByteArray baos))
-            (async/put! res-ch [(second old) (second new)]))
-          (catch Exception e (.printStackTrace e) (async/put! res-ch (prep-ex "Failed to update/write value in store" e)))))
+            (async/put! res-ch [(second old-val) (second new-val)]))
+          (catch Exception e (async/put! res-ch (prep-ex "Failed to update/write value in store" e)))))
         res-ch))
 
   (-assoc-in [
@@ -175,9 +180,12 @@
     (let [res-ch (async/chan 1)]
       (async/thread
         (try
-          (let [res (get-it store (str-uuid key) read-handlers)]
+          (let [res (get-it store (str-uuid key))]
             (if (some? res) 
-              (async/put! res-ch (locked-cb (prep-stream res)))  
+              (let [res-vec (vec res)
+                    meta-len (-> res-vec (subvec 0 7) byte-array ByteBuffer/wrap (.getInt 0))
+                    data (byte-array (subvec res-vec (+ 8 meta-len)))]
+                (async/put! res-ch (locked-cb (prep-stream data))))
               (async/close! res-ch)))
           (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve binary value from store" e)))))
       res-ch))
@@ -188,16 +196,25 @@
     (let [res-ch (async/chan 1)]
       (async/thread
         (try
-          (let [old' (get-it store (str-uuid key))
-                old   (when old'
-                        (let [bais (ByteArrayInputStream. old')]
-                          (-deserialize serializer write-handlers bais)))
-                new [(meta-up-fn (first old)) input]
-                baos (ByteArrayOutputStream.)]
-            (-serialize serializer baos write-handlers new)
-            (update-it store (str-uuid key) (.toByteArray baos))
-            (async/put! res-ch [(second old) (second new)]))
-          (catch Exception e (.printStackTrace e) (async/put! res-ch (prep-ex "Failed to update/write binary value in store" e)))))
+          (let [old-val' (get-it store (str-uuid key))
+                old-val (when old-val'
+                          (let [old-vec (vec old-val')
+                                meta-len (-> old-vec (subvec 0 7) byte-array ByteBuffer/wrap (.getInt 0))
+                                meta (subvec old-vec 8 (+ 8 meta-len))
+                                bais (ByteArrayInputStream. (byte-array meta))]
+                            [(-deserialize serializer read-handlers bais) 
+                             (byte-array (subvec old-vec (+ 8 meta-len)))]))
+                new-meta (meta-up-fn (first old-val))
+                ^ByteArrayOutputStream baos (ByteArrayOutputStream.)
+                _ (-serialize serializer baos write-handlers new-meta)
+                meta-as-bytes (.toByteArray baos)
+                meta-size (.putInt (ByteBuffer/allocate 8) (count meta-as-bytes))
+                combined-byte-array (byte-array 
+                                      (into [] 
+                                        (concat (.array meta-size) meta-as-bytes input)))]
+            (update-it store (str-uuid key) combined-byte-array)
+            (async/put! res-ch [(second old-val) input]))
+          (catch Exception e (async/put! res-ch (prep-ex "Failed to update/write binary value in store" e)))))
         res-ch))
 
   PKeyIterable
@@ -205,7 +222,7 @@
     ;"Doc string"
     [_]
     (let [res-ch (async/chan)]
-      ;(async/thread
+      (async/thread
         (try
           (let [key-stream (get-keys store)
                 keys' (when key-stream
@@ -216,7 +233,7 @@
             (doall
               (map #(async/put! res-ch %) keys)))
           (async/close! res-ch) 
-          (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve keys from store" e))));)
+          (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve keys from store" e)))))
         res-ch)))
 
 ; Setting up your store
@@ -224,15 +241,15 @@
 (defn- store-initializer 
   "Doc string"
   [critical config]
-  (atom { :config config
-          :auth critical
-          :meta {}
-          :data {}}))
+  { :config config
+    :version 1
+    :auth critical
+    :data (atom {})})
 
 (defn new-your-store
   "Creates a new store connected to your backend."
   [critical-data & {:keys [config serializer read-handlers write-handlers]
-                    :or   {config {:config :default} ;add the specific atom or config for your store as an object
+                    :or   {config :default ;add the specific atom or config for your store as an object
                            serializer (ser/fressian-serializer) ; or (ser/string-serializer)
                            read-handlers (atom {}) 
                            write-handlers (atom {})}}]
@@ -240,9 +257,9 @@
       (async/thread
         (try
           (let [your-conn (store-initializer critical-data config)] 
+            (reality your-conn)
             (async/put! res-ch 
               (map->YourStore { :store your-conn
-                                :error (reality your-conn) ;simulate store init error
                                 :serializer serializer
                                 :read-handlers read-handlers
                                 :write-handlers write-handlers
@@ -253,11 +270,13 @@
 
 (defn delete-store 
   "Doc string"
-  [store]
+  [your-store]
   (let [res-ch (async/chan 1)]
     (async/thread
       (try
-         ; do something to delete your store data.
-        (reset! store nil)
+        ; do something to delete your store data.
+        (reality (:store your-store))
+        (update-in your-store [:store] #(dissoc % :data))
+        (async/close! res-ch)
         (catch Exception e (async/put! res-ch (prep-ex "Failed to delete store" e)))))          
         res-ch))
