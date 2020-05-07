@@ -8,10 +8,11 @@
                                         -update-in -assoc-in -dissoc
                                         PBinaryAsyncKeyValueStore
                                         -bassoc -bget
+                                        -serialize -deserialize
                                         PKeyIterable
                                         -keys]]
             [incognito.edn :refer [read-string-safe]])
-  (:import  [java.io ByteArrayInputStream]))
+  (:import  [java.io ByteArrayInputStream ByteArrayOutputStream]))
 
 (set! *warn-on-reflection* 1)
 
@@ -23,106 +24,54 @@
   (Thread/sleep (rand-int 200))
   (if (nil? (:auth @store)) (throw (Exception. "Boo!")) nil)) 
 
-(defn serialize 
-  "Serializes clojure data structure to your backend.   
-   This function needs to handle both regular clojure data structures
-   as well as binary data. If your backend does not support binary data you can use Base64 encoding
-   to represent your binary data as a string. It's worthing noting that Base64 increase the data size by 33%
-   
-   It's a good idea to serialize actual data and metadata seperately. It would be a real tragedy to have 
-   to download 100MB just to inspect 20 bytes of metadata.  
-   
-   `data`: clojure data or binary data
-   `write-handlers`: atom containing incognito write handlers. pr-str is the base level serializer. 
-                     Learn more [here](https://github.com/replikativ/incognito)     
+(defn prep-write 
+  "Doc string"
+  [data]
+  data)
 
-   This function should return data that is ready to be inserted into you backend as is by any subsequent functions.
-   "
-  [data write-handlers]
-  (if (bytes? data)
-    {:data (identity data) :type "binary"}
-    {:data (pr-str data) :type "regular"}))
-
-(defn deserialize 
-  "Deserializes data form your backend into clojure data structures.   
-   This function is complementary to `serialize` and should be lossless so that no matter how many time data
-   is serialized, deserialized and serialized again no data is lost or corrupted. 
-   
-   This function should also be able to deserialize meta data.  
-   
-   `data`: clojure data or binary data
-   `read-handlers`: atom containing incognito read handlers. read-string-safe is the base level serializer 
-                     Learn more [here](https://github.com/replikativ/incognito)     
-
-   This function should return clojure data structures that are ready to be used as is by any subsequent functions.
-   "
-  [data' read-handlers]
-  (if (= "binary" (:type data'))
-    (:data data')
-    (read-string-safe @read-handlers (:data data'))))
+(defn prep-read 
+  "Doc string"
+  [data']
+  data')
 
 (defn it-exists? 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
   ;returns a boolean
-  (some? (get-in @store [:meta id]))) ;example
+  (some? (get-in @store [:data id]))) ;example
   
 (defn get-it 
   "Doc string"
-  [store id read-handlers]
+  [store id]
   (reality store) ;simulate store failure
   ;returns deserialized data as a map
-  (let [meta (get-in @store [:meta id])
-        data (get-in @store [:data id])]
-    [(deserialize meta read-handlers) (deserialize data read-handlers)])) ;example
-
-(defn get-it-only   
-  "Doc string"
-  [store id read-handlers]
-  (reality store) ;simulate store failure
-  ;returns deserialized data as a map
-  (deserialize (get-in @store [:data id]) read-handlers)) ;example
-
-(defn get-meta-only 
-  "Doc string"
-  [store id read-handlers]
-  (reality store) ;simulate store failure
-  ;returns deserialized data as a map
-  (deserialize (get-in @store [:meta id]) read-handlers)) ;example
+  (get-in @store [:data id]))
 
 (defn update-it 
   "Doc string"
-  [store id data-and-meta read-handlers]
+  [store id data]
   (reality store) ;simulate store failure
   ;1. serialize the data
   ;2. update the data
   ;3. deserialize the updated data
   ;4. return the data
-  (let [serialized-meta (serialize (first data-and-meta))
-        serialized-data (serialize (second data-and-meta))
-        stored-meta (swap! store assoc-in [:meta id] serialized-meta)
-        stored-data (swap! store assoc-in [:data id] serialized-data)] ;example
-        [(deserialize (get-in stored-meta [:meta id]) read-handlers) 
-         (deserialize (get-in stored-data [:data id]) read-handlers)])) ;example
+  (swap! store assoc-in [:data id] data)) ;example
 
 (defn delete-it 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
   ;delete the data and return nil on success
-  (swap! store update-in [:meta] dissoc id)
-  (swap! store update-in [:data] dissoc id) ;example
-  nil) 
+  (swap! store update-in [:data] dissoc id)) 
 
 (defn get-keys 
   "Doc string"
-  [store read-handlers]
+  [store]
   (reality store) ;simulate store failure
   ;returns deserialized data as a map
-  (let [meta (get @store :meta)
-        meta-vals (seq (vals meta))]
-    (map #(-> (deserialize % read-handlers) :key) meta-vals))) ;example
+  (let [keys (seq (vals (get-in @store [:data])))]
+    keys)) ;example
 
 (defn str-uuid 
   "Doc string"
@@ -162,9 +111,10 @@
     (let [res-ch (async/chan 1)]
       (async/thread
         (try
-          (let [res (get-it-only store (str-uuid key) read-handlers)]
+          (let [res (get-it store (str-uuid key))]
             (if (some? res) 
-              (async/put! res-ch res)
+              (let [bais (ByteArrayInputStream. res)] 
+                (async/put! res-ch (second (-deserialize serializer read-handlers bais))))
               (async/close! res-ch)))
           (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve value from store" e)))))
       res-ch))
@@ -175,9 +125,10 @@
     (let [res-ch (async/chan 1)]
       (async/thread
         (try
-          (let [res (get-meta-only store (str-uuid key) read-handlers)]
+          (let [res (get-it store (str-uuid key))]
             (if (some? res) 
-              (async/put! res-ch res)
+              (let [bais (ByteArrayInputStream. res)] 
+                (async/put! res-ch (first (-deserialize serializer read-handlers bais))))
               (async/close! res-ch)))
           (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve value metadata from store" e)))))
       res-ch))
@@ -189,15 +140,17 @@
       (async/thread
         (try
           (let [[fkey & rkey] key-vec
-                old-val (get-it store (str-uuid fkey) read-handlers)
-                new-val (update-it 
-                              store
-                              (str-uuid fkey)
-                              (let [[meta data] old-val]
-                                [(meta-up-fn meta) (if rkey (apply update-in data rkey up-fn args) (apply up-fn data args))])
-                              read-handlers)]
-            (async/put! res-ch [(second old-val) (second new-val)]))
-          (catch Exception e (async/put! res-ch (prep-ex "Failed to update or write value in store" e)))))
+                old' (get-it store (str-uuid fkey))
+                old   (when old'
+                        (let [bais (ByteArrayInputStream. old')]
+                          (-deserialize serializer write-handlers bais)))
+                new [(meta-up-fn (first old)) 
+                     (if rkey (apply update-in (second old) rkey up-fn args) (apply up-fn (second old) args))]
+                baos (ByteArrayOutputStream.)]
+            (-serialize serializer baos write-handlers new)
+            (update-it store (str-uuid fkey) (.toByteArray baos))
+            (async/put! res-ch [(second old) (second new)]))
+          (catch Exception e (.printStackTrace e) (async/put! res-ch (prep-ex "Failed to update/write value in store" e)))))
         res-ch))
 
   (-assoc-in [
@@ -222,11 +175,11 @@
     (let [res-ch (async/chan 1)]
       (async/thread
         (try
-          (let [res (get-it-only store (str-uuid key) read-handlers)]
+          (let [res (get-it store (str-uuid key) read-handlers)]
             (if (some? res) 
               (async/put! res-ch (locked-cb (prep-stream res)))  
               (async/close! res-ch)))
-          (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve value from store" e)))))
+          (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve binary value from store" e)))))
       res-ch))
 
   (-bassoc 
@@ -235,30 +188,35 @@
     (let [res-ch (async/chan 1)]
       (async/thread
         (try
-          (let [old-val (get-it store (str-uuid key) read-handlers)
-                new-val (update-it 
-                              store
-                              (str-uuid key)
-                              (let [[meta _] old-val] ;We ignore the existing binary data and overwrite it.
-                                [(meta-up-fn meta) input])
-                              read-handlers)]
-            (async/put! res-ch [(second old-val) (second new-val)]))
-          (catch Exception e (async/put! res-ch (prep-ex "Failed to update or write value in store" e)))))
+          (let [old' (get-it store (str-uuid key))
+                old   (when old'
+                        (let [bais (ByteArrayInputStream. old')]
+                          (-deserialize serializer write-handlers bais)))
+                new [(meta-up-fn (first old)) input]
+                baos (ByteArrayOutputStream.)]
+            (-serialize serializer baos write-handlers new)
+            (update-it store (str-uuid key) (.toByteArray baos))
+            (async/put! res-ch [(second old) (second new)]))
+          (catch Exception e (.printStackTrace e) (async/put! res-ch (prep-ex "Failed to update/write binary value in store" e)))))
         res-ch))
 
   PKeyIterable
   (-keys 
     ;"Doc string"
     [_]
-   (let [res-ch (async/chan)]
-      (async/thread
+    (let [res-ch (async/chan)]
+      ;(async/thread
         (try
-          (doall
-            (map 
-              #(async/put! res-ch %)
-              (get-keys store read-handlers)))
-          (async/close! res-ch)
-          (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve keys from store" e)))))
+          (let [key-stream (get-keys store)
+                keys' (when key-stream
+                        (for [k key-stream]
+                          (let [bais (ByteArrayInputStream. k)]
+                            (first (-deserialize serializer read-handlers bais)))))
+                keys (map :key keys')]
+            (doall
+              (map #(async/put! res-ch %) keys)))
+          (async/close! res-ch) 
+          (catch Exception e (async/put! res-ch (prep-ex "Failed to retrieve keys from store" e))));)
         res-ch)))
 
 ; Setting up your store
@@ -275,7 +233,7 @@
   "Creates a new store connected to your backend."
   [critical-data & {:keys [config serializer read-handlers write-handlers]
                     :or   {config {:config :default} ;add the specific atom or config for your store as an object
-                           serializer (ser/string-serializer) ; or (ser/fressian-serializer)  
+                           serializer (ser/fressian-serializer) ; or (ser/string-serializer)
                            read-handlers (atom {}) 
                            write-handlers (atom {})}}]
     (let [res-ch (async/chan 1)] 

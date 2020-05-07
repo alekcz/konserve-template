@@ -51,6 +51,7 @@
       (<!! (k/bget store :binbar (fn [{:keys [input-stream]}]
                                     (is (= (map byte (slurp input-stream))
                                            (range 10))))))
+      (<!! (k/assoc-in store [:binbar] :binbin))
       (is (= #{:baz :binbar}
              (<!! (async/into #{} (k/keys store)))))
       (delete-store store)
@@ -130,7 +131,7 @@
       (print "\nWriting 20MB string: ")
       (time (<!! (k/assoc store :record string20MB)))
       (is (= (count string20MB) (count (<!! (k/get store :record)))))
-      (print "Writing 20MB binary: ")
+      (print "Writing 2MB binary: ")
       (time (<!! (k/bassoc store :binary (byte-array sevens))))
       (<!! (k/bget store :binary (fn [{:keys [input-stream]}]
                                     (is (= (pmap byte (slurp input-stream))
