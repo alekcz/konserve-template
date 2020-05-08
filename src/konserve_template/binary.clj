@@ -249,7 +249,7 @@
   "Creates a new store connected to your backend."
   [critical-data & {:keys [config serializer read-handlers write-handlers]
                     :or   {config :default ;add the specific atom or config for your store as an object
-                           serializer (ser/fressian-serializer) ; or (ser/string-serializer)
+                           serializer (ser/fressian-serializer) 
                            read-handlers (atom {}) 
                            write-handlers (atom {})}}]
     (let [res-ch (async/chan 1)] 

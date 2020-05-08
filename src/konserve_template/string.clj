@@ -11,7 +11,7 @@
                                         -serialize -deserialize
                                         PKeyIterable
                                         -keys]])
-  (:import  [java.io ByteArrayInputStream StringWriter StringReader]
+  (:import  [java.io ByteArrayInputStream StringWriter]
             [java.util Base64 Base64$Decoder Base64$Encoder]))
 
 (set! *warn-on-reflection* 1)
