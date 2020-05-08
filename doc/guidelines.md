@@ -55,7 +55,7 @@ In this repo [binary.clj](../src/konserve_template/binary.clj) gives an example 
 Where possible, it's best to store you metadata in a way that allows it to be retrieved separately. 
 This should only be done if writing to two separate locations can be done atomically. This saves you the hassle slicing a byte-array and deally with portions of it. 
 
-In this repo [string.clj](../src/konserve_template/string.clj) gives an example of a separation between metadata and data. 
+In this repo [string.clj](../src/konserve_template/string.clj) gives an example of a store that only accepts strings.
 
 ### I/O
 All IO operation in conserve are asynchronouns and use [core.async](https://github.com/clojure/core.async). To help you avoid pitfalls in this regards this repo has simulates a backend store with inconsistent latency and implements the structure to handle that asynchronously. 

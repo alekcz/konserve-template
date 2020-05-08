@@ -66,7 +66,7 @@
       (<!! (k/bget store :binbar (fn [{:keys [input-stream]}]
                                     (is (= (map byte (slurp input-stream))
                                            (map inc (range 10)))))))                                          
-      ;(is (<!! (k/exists? store :binbar)))
+      (is (<!! (k/exists? store :binbar)))
       (delete-store store))))
   
 (deftest key-tests

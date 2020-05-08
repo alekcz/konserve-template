@@ -38,44 +38,39 @@
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
-  ;returns a boolean
-  (contains? (deref (:data store)) id)) ;example
+  (contains? (deref (:data store)) id)) 
   
 (defn get-it 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
-  ;returns deserialized data as a map
   (prep-read (get (deref (:data store)) id)))
 
 (defn update-it 
   "Doc string"
   [store id data]
   (reality store) ;simulate store failure
-  ;1. serialize the data
-  ;2. update the data
-  ;3. deserialize the updated data
-  ;4. return the data
   (swap! (:data store) #(assoc % id (prep-write data))))
 
 (defn delete-it 
   "Doc string"
   [store id]
   (reality store) ;simulate store failure
-  ;delete the data and return nil on success
   (swap! (:data store) #(dissoc % id)))
 
 (defn get-keys 
   "Doc string"
   [store]
   (reality store) ;simulate store failure
-  ;returns deserialized data as a map
   (let [keys (seq (vals @(:data store)))]
-    (map prep-read keys))) ;example
+    (map prep-read keys))) 
 
 (defn str-uuid 
   "Doc string"
-  [key] ;using hasch we create a uuid and convert it to string. 
+  [key] 
+  ;using hasch we create a uuid and convert it to string. 
+  ;apply any other restrictions imposed by use store. 
+  ;whatever transforms you apply you must insure they are collision free
   (str (hasch/uuid key))) 
 
 (defn prep-ex 
