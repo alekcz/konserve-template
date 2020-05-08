@@ -4,10 +4,7 @@ An implementation guide and template of the [konserve kv-protocol (v0.6.0)](http
 
 ## About 
 This is a starter template it give basic guide lines on how to build a konserve backend.   
-The source code is heavily commented so go [check it out](./src/konserve_template/core.clj).   
-
-Why comments in the source? Two reasons. Firstly it's easier to understand what is going on in the context of the code.   
-Secondly, when you start implementing your backend having the explanation right where you're writing the code is quite benficial.  
+The source code is heavily commented so go check it out. You can also read the [implementation guidelines here](./doc/guidelines.md).   
 
 It's important to have a solid foundation when building a library. To help you keep your quality up you can run
 - `lein test` to test your code
