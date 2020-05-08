@@ -19,7 +19,7 @@ The idea of konserve is to abstract away the implementation differences across b
 
 These functions are conceptually identical to their clojure counterparts (with bget and bassoc) dealing with binary data. 
 
-There are a few other functions in the API that are used internally for data integrity and performance and aren't particulary relevent at for us at this point. 
+There are a few other functions in the API that are used internally for data integrity and performance but aren't particulary relevent at to us at this point. 
 
 ### Data representation in flight
 Data moves through konserve as tuples containing the meta data as well as the actual data to be stored like so `[meta data]`. 
@@ -30,4 +30,28 @@ Because you have no control of what your users of will decide to store in your b
 
 ### I/O
 All IO operation in conserve are asynchronouns and use [core.async](https://github.com/clojure/core.async). To help you avoid pitfalls in this regards this repo has simulates a backend store with inconsistent latency and implements the structure to handle that asynchronously. 
+
+## Implementing version 0.6.0 of the konserve protocol
+To support the core konserve API you need to implement the following methods as described in the konserve protocol: 
+```clojure
+(-exists? [this key] "Checks whether value is in the store.")
+(-get-meta [this key] "Fetch only metadata for the key.")
+(-get [this key] "Returns the value stored described by key or nil if the path is not resolvable.")
+(-update-in [this key-vec meta-up-fn up-fn up-fn-args]
+    "Updates a position described by key-vec by applying up-fn and storing the result atomically.    
+    Returns a vector [old new] of the previous value and the result of applying up-fn 
+    (the newly stored value).")
+(-assoc-in [this key-vec meta-up-fn val]) 
+(-dissoc [this key]) 
+(-keys [this] "Return a channel that will continuously yield keys in this store.")
+; optional methods
+(-bget [this key locked-cb] "Calls locked-cb with a platform specific binary representation inside the lock,   
+    e.g. wrapped InputStream on the JVM and Blob in JavaScript. You need to properly close/dispose 
+    the object when you are done!")
+(-bassoc [this key meta-up-fn val] "Copies given value (InputStream, Reader, File, byte[] or String on JVM, 
+    Blob in JavaScript) under key in the store.")
+```
+
+
+
 
