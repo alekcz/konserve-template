@@ -1,8 +1,8 @@
-(ns konserve-template.core-test
+(ns konserve-template.binary-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.core.async :refer [<!!] :as async]
             [konserve.core :as k]
-            [konserve-template.core :refer [new-your-store delete-store]]
+            [konserve-template.binary :refer [new-your-store delete-store]]
             [malli.generator :as mg])
   (:import  [clojure.lang ExceptionInfo]))
 
@@ -43,7 +43,7 @@
 
 (deftest exists-tests
   (testing "Test check for existing key in the store"
-    (let [_ (println "Checking is keys exist")
+    (let [_ (println "Checking if keys exist")
           store (<!! (new-your-store "critical"))]
       (is (not (<!! (k/exists? store :foo))))
       (<!! (k/assoc store :foo :baritone))

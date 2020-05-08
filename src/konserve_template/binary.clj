@@ -1,4 +1,4 @@
-(ns konserve-template.core
+(ns konserve-template.binary
   "Address globally aggregated immutable key-value store(s)."
   (:require [clojure.core.async :as async]
             [konserve.serializers :as ser]
@@ -10,8 +10,7 @@
                                         -bassoc -bget
                                         -serialize -deserialize
                                         PKeyIterable
-                                        -keys]]
-            [incognito.edn :refer [read-string-safe]])
+                                        -keys]])
   (:import  [java.io ByteArrayInputStream ByteArrayOutputStream]
             [java.nio ByteBuffer]))
 
